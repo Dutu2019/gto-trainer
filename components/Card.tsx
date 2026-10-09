@@ -35,3 +35,17 @@ export function Card({
     </div>
   );
 }
+
+export function CardBack({ size = "md" }: { size?: Size }) {
+  return (
+    <div
+      className={`${SIZES[size]} rounded-lg border border-white/60 bg-gradient-to-br from-sky-600 via-indigo-700 to-indigo-900 p-[3px] shadow-md`}
+    >
+      <div className="flex h-full w-full items-center justify-center rounded-md border border-white/30 bg-[repeating-linear-gradient(45deg,rgba(255,255,255,0.10)_0,rgba(255,255,255,0.10)_2px,transparent_2px,transparent_6px)]">
+        <span className="text-white/60" aria-hidden="true">
+          {"\u2660"}
+        </span>
+      </div>
+    </div>
+  );
+}

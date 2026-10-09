@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import { ActionBar } from "./ActionBar";
-import { Board, HandDisplay } from "./Board";
+import { PokerTable } from "./PokerTable";
 import { Progress } from "./Progress";
 import { ResultPanel } from "./ResultPanel";
 import { gradeAnswer, type GradeResult } from "@/lib/grading";
 import {
-  formatChips,
   formatPct,
   MATCHUP_LABELS,
   STREET_LABELS,
@@ -222,44 +221,29 @@ export function TrainerApp() {
             }))}
           />
 
-          <div className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
               <span className="rounded-full bg-zinc-800 px-3 py-1 font-medium text-zinc-300">
                 {STREET_LABELS[current.street]} &middot;{" "}
                 {MATCHUP_LABELS[current.matchup] ?? current.matchup}
               </span>
               <span>
-                Pot {formatChips(current.pot)} &middot; Eff. stack{" "}
-                {formatChips(current.effectiveStack)}
+                You are {current.position} &middot;{" "}
+                {current.actor === "OOP" ? "out of position" : "in position"}
               </span>
             </div>
 
-            <div className="space-y-2">
-              <span className="text-xs uppercase tracking-wide text-zinc-500">
-                Board
-              </span>
-              <Board cards={current.board} />
-            </div>
+            <PokerTable
+              board={current.board}
+              heroCards={current.holeCards}
+              actor={current.actor}
+              position={current.position}
+              opponentPosition={current.opponentPosition}
+              pot={current.pot}
+              effectiveStack={current.effectiveStack}
+            />
 
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div className="space-y-2">
-                <span className="text-xs uppercase tracking-wide text-zinc-500">
-                  Your hand
-                </span>
-                <HandDisplay cards={current.holeCards} />
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-semibold text-zinc-100">
-                  {current.position}
-                </div>
-                <div className="text-xs text-zinc-400">
-                  {current.actor === "OOP" ? "Out of position" : "In position"} vs{" "}
-                  {current.opponentPosition}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
+            <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
               <p className="text-sm font-medium text-zinc-300">What do you do?</p>
               <ActionBar
                 actions={current.actions}
