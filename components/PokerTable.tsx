@@ -43,7 +43,7 @@ function StatBadge({
   );
 }
 
-function Seat({
+export function Seat({
   name,
   position,
   actor,
@@ -103,34 +103,18 @@ function Seat({
 
 export function PokerTable({
   board,
-  heroCards,
-  actor,
-  position,
-  opponentPosition,
   pot,
   effectiveStack,
 }: {
   board: string[];
-  heroCards: string[];
-  actor: Actor;
-  position: string;
-  opponentPosition: string;
   pot: number;
   effectiveStack: number;
 }) {
-  const opponentActor: Actor = actor === "OOP" ? "IP" : "OOP";
 
   return (
-    <div className="relative overflow-hidden rounded-[2.5rem] border-[10px] border-amber-950/80 bg-gradient-to-b from-emerald-700 via-emerald-900 to-emerald-950 p-5 shadow-2xl ring-1 ring-black/40 sm:p-8">
-      <div className="pointer-events-none absolute inset-3 rounded-[2rem] ring-1 ring-white/10" />
+    <div className="relative overflow-hidden rounded-full bg-linear-to-b from-emerald-700 via-emerald-900 to-emerald-950 p-5 shadow-2xl ring-1 ring-black/40 sm:p-8">
+      <div className="pointer-events-none absolute inset-3 rounded-4xl ring-1 ring-white/10" />
       <div className="relative flex flex-col items-center gap-5">
-        <Seat
-          name="Opponent"
-          position={opponentPosition}
-          actor={opponentActor}
-          stack={effectiveStack}
-          faceDown
-        />
 
         <div className="flex flex-col items-center gap-4 py-1">
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -140,14 +124,6 @@ export function PokerTable({
           <Board cards={board} />
         </div>
 
-        <Seat
-          name="You"
-          position={position}
-          actor={actor}
-          cards={heroCards}
-          stack={effectiveStack}
-          highlight
-        />
       </div>
     </div>
   );

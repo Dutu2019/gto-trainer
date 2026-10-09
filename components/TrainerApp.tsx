@@ -2,15 +2,11 @@
 
 import { useState } from "react";
 import { ActionBar } from "./ActionBar";
-import { PokerTable } from "./PokerTable";
+import { PokerTable, Seat } from "./PokerTable";
 import { Progress } from "./Progress";
 import { ResultPanel } from "./ResultPanel";
 import { gradeAnswer, type GradeResult } from "@/lib/grading";
-import {
-  formatPct,
-  MATCHUP_LABELS,
-  STREET_LABELS,
-} from "@/lib/format";
+import { formatPct, MATCHUP_LABELS, STREET_LABELS } from "@/lib/format";
 import type { AnsweredQuestion, Answer, Question, Street } from "@/lib/types";
 
 const ALL_MATCHUPS = ["SB_BB", "BTN_BB"];
@@ -44,7 +40,9 @@ export function TrainerApp() {
 
   const current = questions[index] ?? null;
   const grade: GradeResult | null =
-    answer && chosenIndex != null ? gradeAnswer(answer.freqs, chosenIndex) : null;
+    answer && chosenIndex != null
+      ? gradeAnswer(answer.freqs, chosenIndex)
+      : null;
 
   async function start() {
     if (!matchups.length || !streets.length) {
@@ -60,9 +58,13 @@ export function TrainerApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ count, matchups, streets }),
       });
-      const data = (await res.json()) as { questions?: Question[]; error?: string };
+      const data = (await res.json()) as {
+        questions?: Question[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? "Failed to load session.");
-      if (!data.questions?.length) throw new Error("No questions for those filters.");
+      if (!data.questions?.length)
+        throw new Error("No questions for those filters.");
       setQuestions(data.questions);
       setIndex(0);
       setAnswer(null);
@@ -124,7 +126,9 @@ export function TrainerApp() {
       {phase === "setup" && (
         <section className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
           <div>
-            <h2 className="mb-3 text-sm font-semibold text-zinc-200">Matchups</h2>
+            <h2 className="mb-3 text-sm font-semibold text-zinc-200">
+              Matchups
+            </h2>
             <div className="flex flex-wrap gap-2">
               {ALL_MATCHUPS.map((m) => (
                 <button
@@ -144,7 +148,9 @@ export function TrainerApp() {
           </div>
 
           <div>
-            <h2 className="mb-3 text-sm font-semibold text-zinc-200">Streets</h2>
+            <h2 className="mb-3 text-sm font-semibold text-zinc-200">
+              Streets
+            </h2>
             <div className="flex flex-wrap gap-2">
               {ALL_STREETS.map((s) => (
                 <button
@@ -233,18 +239,32 @@ export function TrainerApp() {
               </span>
             </div>
 
+            <Seat
+              name="Opponent"
+              position={current.opponentPosition}
+              actor={current.actor === "OOP" ? "IP" : "OOP"}
+              stack={current.effectiveStack}
+              faceDown
+            />
+
             <PokerTable
               board={current.board}
-              heroCards={current.holeCards}
-              actor={current.actor}
-              position={current.position}
-              opponentPosition={current.opponentPosition}
               pot={current.pot}
               effectiveStack={current.effectiveStack}
             />
 
+            <Seat
+              name="You"
+              position={current.position}
+              actor={current.actor}
+              stack={current.effectiveStack}
+              cards={current.holeCards}
+            />
+
             <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-              <p className="text-sm font-medium text-zinc-300">What do you do?</p>
+              <p className="text-sm font-medium text-zinc-300">
+                What do you do?
+              </p>
               <ActionBar
                 actions={current.actions}
                 onChoose={choose}
@@ -328,7 +348,9 @@ function Review({
               className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-3 text-sm"
             >
               <div className="flex items-center gap-3">
-                <span className="font-mono text-zinc-400">{entry.question.hand}</span>
+                <span className="font-mono text-zinc-400">
+                  {entry.question.hand}
+                </span>
                 <span className="text-zinc-500">
                   {STREET_LABELS[entry.question.street]} &middot;{" "}
                   {entry.question.position}
@@ -336,7 +358,8 @@ function Review({
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-zinc-400">
-                  Yours: {entry.answer.actions[entry.chosenIndex]?.split(" ")[0]}
+                  Yours:{" "}
+                  {entry.answer.actions[entry.chosenIndex]?.split(" ")[0]}
                 </span>
                 <span className="text-emerald-300">
                   GTO: {entry.answer.actions[best]?.split(" ")[0]}
