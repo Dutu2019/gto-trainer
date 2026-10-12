@@ -4,7 +4,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { spots, matchups } from "./spots.config.mjs";
+import {
+  spots,
+  matchups,
+  preflopFor,
+  resolvedBetSizes,
+} from "./spots.config.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RAW_DIR = path.join(ROOT, "data", "raw");
@@ -23,6 +28,8 @@ CREATE TABLE IF NOT EXISTS spots (
   ip_position   TEXT NOT NULL,
   oop_range     TEXT NOT NULL,
   ip_range      TEXT NOT NULL,
+  preflop       TEXT NOT NULL,
+  bet_sizes     TEXT NOT NULL,
   solver        TEXT NOT NULL,
   exploitability REAL,
   created_at    TEXT NOT NULL
@@ -70,8 +77,9 @@ function loadSpot(db, spot, insertNode, insertStrategy) {
 
   db.prepare(
     `INSERT INTO spots (id,name,matchup,street,board,pot,effective_stack,
-       oop_position,ip_position,oop_range,ip_range,solver,exploitability,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       oop_position,ip_position,oop_range,ip_range,preflop,bet_sizes,solver,
+       exploitability,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).run(
     spot.id,
     spot.id,
@@ -84,6 +92,8 @@ function loadSpot(db, spot, insertNode, insertStrategy) {
     positions.ip,
     "",
     "",
+    preflopFor(spot),
+    JSON.stringify(resolvedBetSizes(spot)),
     "TexasSolver v0.2.0",
     exploitabilityFromLog(path.join(RAW_DIR, `${spot.id}.log`)),
     new Date().toISOString(),
@@ -145,8 +155,9 @@ function loadSpot(db, spot, insertNode, insertStrategy) {
 }
 
 const db = new DatabaseSync(DB_PATH);
+// Rebuild from scratch so schema changes (new spot columns) always apply.
+db.exec("DROP TABLE IF EXISTS strategies; DROP TABLE IF EXISTS nodes; DROP TABLE IF EXISTS spots;");
 db.exec(DDL);
-db.exec("DELETE FROM strategies; DELETE FROM nodes; DELETE FROM spots;");
 
 const insertNode = db.prepare(
   `INSERT INTO nodes (spot_id,node_key,street,board,actor,action_json,history)

@@ -40,6 +40,28 @@ export const matchups = {
   BTN_BB: { oop: "BB", ip: "BTN" },
 };
 
+// Preflop "hand history" that leads to each matchup's postflop spot. Each spot
+// may override this with its own `preflop` string (e.g. a 3-bet pot).
+export const preflopLines = {
+  SB_BB: "SB raises to 2.5bb, BB calls",
+  BTN_BB: "BTN raises to 2.5bb, BB calls",
+};
+
+// Default betting options per street for each position. Values are pot
+// percentages; `allin` adds an all-in size. Each extra size grows the solve
+// tree and increases solve time/memory, so keep these lean. Individual spots
+// can override any street/position via `betSizes` (merged over these defaults).
+export const defaultBetSizes = {
+  turn: {
+    oop: { bet: [33, 75], raise: [60], allin: true },
+    ip: { bet: [33, 75], raise: [60], allin: true },
+  },
+  river: {
+    oop: { bet: [33, 75], raise: [60], allin: true },
+    ip: { bet: [33, 75], raise: [60], allin: true },
+  },
+};
+
 export const spots = [
   {
     id: "sb_bb_river_As7h2c9d3s",
@@ -48,6 +70,7 @@ export const spots = [
     board: "As,7h,2c,9d,3s",
     pot: 6,
     effectiveStack: 94,
+    preflop: "SB raises to 2.5bb, BB calls",
   },
   {
     id: "sb_bb_river_KhTd6c2s9h",
@@ -56,6 +79,7 @@ export const spots = [
     board: "Kh,Td,6c,2s,9h",
     pot: 6,
     effectiveStack: 94,
+    preflop: "SB raises to 2.5bb, BB calls",
   },
   {
     id: "btn_bb_river_QsJh4d8c3s",
@@ -64,6 +88,7 @@ export const spots = [
     board: "Qs,Jh,4d,8c,3s",
     pot: 6,
     effectiveStack: 94,
+    preflop: "BTN raises to 2.5bb, BB calls",
   },
   {
     id: "btn_bb_turn_Qh8s3d2c",
@@ -72,6 +97,7 @@ export const spots = [
     board: "Qh,8s,3d,2c",
     pot: 6,
     effectiveStack: 94,
+    preflop: "BTN raises to 2.5bb, BB calls",
   },
   {
     id: "sb_bb_turn_9d9h5s2c",
@@ -80,6 +106,7 @@ export const spots = [
     board: "9d,9h,5s,2c",
     pot: 6,
     effectiveStack: 94,
+    preflop: "SB raises to 2.5bb, BB calls",
   },
 ];
 
@@ -87,4 +114,31 @@ export const spots = [
 // full downstream tree even if we only dump the first street).
 export function streetsFor(street) {
   return street === "river" ? ["river"] : ["turn", "river"];
+}
+
+// Merge the defaults with a spot's `betSizes` override for one street/position.
+export function positionBetSizes(spot, street, who) {
+  const base =
+    defaultBetSizes[street]?.[who] ?? { bet: [], raise: [], allin: true };
+  const override = spot.betSizes?.[street]?.[who] ?? {};
+  return { ...base, ...override };
+}
+
+// Fully resolved betting options for every street a spot solves, keyed by
+// street then position. Stored in SQLite and shown in the trainer UI.
+export function resolvedBetSizes(spot) {
+  const out = {};
+  for (const street of streetsFor(spot.street)) {
+    out[street] = {
+      oop: positionBetSizes(spot, street, "oop"),
+      ip: positionBetSizes(spot, street, "ip"),
+    };
+  }
+  return out;
+}
+
+// Preflop action sequence for a spot: an explicit `preflop` wins over the
+// matchup default.
+export function preflopFor(spot) {
+  return spot.preflop ?? preflopLines[spot.matchup] ?? "";
 }

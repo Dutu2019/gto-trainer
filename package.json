@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "solver:setup": "node scripts/setup-solver.mjs",
     "data:gen": "node scripts/generate-inputs.mjs",
     "data:solve": "node scripts/run-solver.mjs",
     "data:load": "node scripts/load-db.mjs",

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ActionBar } from "./ActionBar";
+import { BettingOptionsPanel } from "./BettingOptionsPanel";
 import { PokerTable, Seat } from "./PokerTable";
 import { Progress } from "./Progress";
 import { ResultPanel } from "./ResultPanel";
@@ -228,15 +229,25 @@ export function TrainerApp() {
           />
 
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
-              <span className="rounded-full bg-zinc-800 px-3 py-1 font-medium text-zinc-300">
-                {STREET_LABELS[current.street]} &middot;{" "}
-                {MATCHUP_LABELS[current.matchup] ?? current.matchup}
-              </span>
-              <span>
-                You are {current.position} &middot;{" "}
-                {current.actor === "OOP" ? "out of position" : "in position"}
-              </span>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
+                <span className="rounded-full bg-zinc-800 px-3 py-1 font-medium text-zinc-300">
+                  {STREET_LABELS[current.street]} &middot;{" "}
+                  {MATCHUP_LABELS[current.matchup] ?? current.matchup}
+                </span>
+                <span>
+                  You are {current.position} &middot;{" "}
+                  {current.actor === "OOP" ? "out of position" : "in position"}
+                </span>
+              </div>
+              {current.preflop && (
+                <p className="rounded-lg bg-zinc-900/50 px-3 py-2 text-xs text-zinc-400">
+                  <span className="font-semibold uppercase tracking-wide text-zinc-500">
+                    Hand history:
+                  </span>{" "}
+                  {current.preflop}
+                </p>
+              )}
             </div>
 
             <Seat
@@ -259,6 +270,12 @@ export function TrainerApp() {
               actor={current.actor}
               stack={current.effectiveStack}
               cards={current.holeCards}
+            />
+
+            <BettingOptionsPanel
+              options={current.bettingOptions}
+              actingPosition={current.position}
+              street={current.street}
             />
 
             <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
@@ -347,14 +364,21 @@ function Review({
               key={i}
               className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-3 text-sm"
             >
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-zinc-400">
-                  {entry.question.hand}
-                </span>
-                <span className="text-zinc-500">
-                  {STREET_LABELS[entry.question.street]} &middot;{" "}
-                  {entry.question.position}
-                </span>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-zinc-400">
+                    {entry.question.hand}
+                  </span>
+                  <span className="text-zinc-500">
+                    {STREET_LABELS[entry.question.street]} &middot;{" "}
+                    {entry.question.position}
+                  </span>
+                </div>
+                {entry.question.preflop && (
+                  <span className="text-[11px] text-zinc-500">
+                    {entry.question.preflop}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-zinc-400">

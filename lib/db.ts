@@ -2,7 +2,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { Actor, Answer, Question, SessionFilters } from "./types";
+import type {
+  Actor,
+  Answer,
+  BettingOptions,
+  PositionBetSizes,
+  Question,
+  SessionFilters,
+} from "./types";
 
 const DB_PATH = path.join(process.cwd(), "data", "gto.db");
 
@@ -31,6 +38,8 @@ interface NodeRow {
   effective_stack: number;
   oop_position: string;
   ip_position: string;
+  preflop: string;
+  bet_sizes: string;
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -64,7 +73,8 @@ export function getSessionQuestions(filters: SessionFilters): Question[] {
   const rows = db()
     .prepare(
       `SELECT n.id, n.spot_id, n.street, n.board, n.actor, n.action_json,
-              s.matchup, s.pot, s.effective_stack, s.oop_position, s.ip_position
+              s.matchup, s.pot, s.effective_stack, s.oop_position, s.ip_position,
+              s.preflop, s.bet_sizes
        FROM nodes n
        JOIN spots s ON s.id = n.spot_id
        ${where}`,
@@ -102,6 +112,19 @@ export function getSessionQuestions(filters: SessionFilters): Question[] {
     seen.add(`${node.id}:${hand}`);
 
     const isOOP = node.actor === "OOP";
+    const bettingOptions: BettingOptions = {};
+    try {
+      const byStreet = JSON.parse(node.bet_sizes || "{}") as Record<
+        string,
+        { oop?: PositionBetSizes; ip?: PositionBetSizes }
+      >;
+      const streetSizes = byStreet[node.street] ?? {};
+      if (streetSizes.oop) bettingOptions[node.oop_position] = streetSizes.oop;
+      if (streetSizes.ip) bettingOptions[node.ip_position] = streetSizes.ip;
+    } catch {
+      // Older databases without betting options still work.
+    }
+
     questions.push({
       nodeId: node.id,
       spotId: node.spot_id,
@@ -113,6 +136,8 @@ export function getSessionQuestions(filters: SessionFilters): Question[] {
       opponentPosition: isOOP ? node.ip_position : node.oop_position,
       pot: node.pot,
       effectiveStack: node.effective_stack,
+      bettingOptions,
+      preflop: node.preflop ?? "",
       actions: JSON.parse(node.action_json) as string[],
       hand,
       holeCards: [hand.slice(0, 2), hand.slice(2, 4)],

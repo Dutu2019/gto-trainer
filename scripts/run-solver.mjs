@@ -3,19 +3,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { spots } from "./spots.config.mjs";
+import { ROOT, SOLVER_DIR, requireSolver, hostLabel } from "./solver.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const EXE = path.join(
-  ROOT,
-  "solver",
-  "texassolver",
-  process.platform === "win32" ? "console_solver.exe" : "console_solver",
-);
-const SOLVER_DIR = path.dirname(EXE);
 const INPUT_DIR = path.join(ROOT, "data", "inputs");
 const RAW_DIR = path.join(ROOT, "data", "raw");
+
+let EXE;
+try {
+  EXE = requireSolver();
+} catch (err) {
+  console.error(String(err instanceof Error ? err.message : err));
+  process.exit(1);
+}
+console.log(`solver: ${path.relative(ROOT, EXE)} on ${hostLabel()}`);
 
 function exploitabilityFromLog(log) {
   const m = [...log.matchAll(/Total exploitability\s+([\d.]+)/g)];

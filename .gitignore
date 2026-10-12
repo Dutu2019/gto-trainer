@@ -43,6 +43,7 @@ next-env.d.ts
 # solver binaries (downloaded, not redistributed)
 /solver/texassolver/
 /solver/*.zip
+/solver/.extract/
 
 # generated data pipeline artifacts
 /data/inputs/

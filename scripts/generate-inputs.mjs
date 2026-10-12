@@ -2,7 +2,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spots, ranges, matchups, solverConfig, streetsFor } from "./spots.config.mjs";
+import {
+  spots,
+  ranges,
+  matchups,
+  solverConfig,
+  streetsFor,
+  positionBetSizes,
+} from "./spots.config.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = path.join(ROOT, "data", "inputs");
@@ -18,8 +25,16 @@ export function buildInput(spot) {
 
   for (const street of streetsFor(spot.street)) {
     for (const who of ["oop", "ip"]) {
-      lines.push(`set_bet_sizes ${who},${street},bet,75`);
-      lines.push(`set_bet_sizes ${who},${street},allin`);
+      const sizes = positionBetSizes(spot, street, who);
+      if (sizes.bet?.length) {
+        lines.push(`set_bet_sizes ${who},${street},bet,${sizes.bet.join(",")}`);
+      }
+      if (sizes.raise?.length) {
+        lines.push(`set_bet_sizes ${who},${street},raise,${sizes.raise.join(",")}`);
+      }
+      if (sizes.allin) {
+        lines.push(`set_bet_sizes ${who},${street},allin`);
+      }
     }
   }
 

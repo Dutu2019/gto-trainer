@@ -8,14 +8,26 @@ and served read-only by the Next.js app. The solver is **not** redistributed and
 ## Chosen solver
 
 - **TexasSolver v0.2.0 (C++ console)** — https://github.com/bupticybee/TexasSolver
-- Downloaded from: `TexasSolver-v0.2.0-Windows.zip` (release asset, x64).
-- Binary: `solver/texassolver/console_solver.exe`
+- Release assets are **x86-64** builds:
+  `TexasSolver-v0.2.0-Windows.zip`, `...-Linux.zip`, `...-MacOs.zip`.
+- Binary (this platform): `solver/texassolver/console_solver.exe` (or
+  `console_solver` on Linux/macOS).
 - License: **GNU AGPL v3**. Used locally for personal strategy study only.
 
-Because this machine is Windows 11 **ARM64**, the x64 binary runs under Windows
-Prism emulation. If that fails or is too slow, fall back to
-**TexasHoldemSolverJava** (MIT, requires an ARM64 JRE) which produces the same
-output JSON format.
+Install it with:
+
+```powershell
+npm run solver:setup            # picks the asset for process.platform
+npm run solver:setup -- --force # re-download
+```
+
+The download is driven by `scripts/solver.mjs`, which also resolves the binary
+path for `run-solver.mjs` and reports a clear error when it is missing.
+
+On **x64** hosts the binary runs natively. On **ARM64** hosts there is no native
+build: the x64 binary runs under emulation (Windows 11 ARM Prism, etc.). If that
+is too slow, fall back to **TexasHoldemSolverJava** (MIT, requires an ARM64 JRE),
+which produces the same output JSON format.
 
 ## Running the bundled sample
 
