@@ -1,5 +1,5 @@
-import { TrainerApp } from "@/components/TrainerApp";
+import Viewer from "@/components/Viewer";
 
-export default function Home() {
-  return <TrainerApp />;
+export default function Page() {
+  return <Viewer />;
 }

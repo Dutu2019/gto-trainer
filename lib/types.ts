@@ -1,57 +1,46 @@
-export type Actor = "OOP" | "IP";
-export type Street = "flop" | "turn" | "river";
+export type Kind = "CHECK" | "BET" | "CALL" | "RAISE" | "FOLD";
 
-/** Solver bet/raise options for one position on one street (pot percentages). */
-export interface PositionBetSizes {
-  bet: number[];
-  raise: number[];
-  allin: boolean;
-}
+export type SpotInfo = {
+  spotId: number;
+  sourceFile: string;
+  street: string;
+  board: string; // 'QsJh4d8c3s'
+  posOop: string;
+  posIp: string;
+  potBb: number | null;
+  effStackBb: number | null;
+};
 
-/** Betting options keyed by position label, e.g. `{ SB: {...}, BB: {...} }`. */
-export type BettingOptions = Record<string, PositionBetSizes>;
+export type ActionInfo = {
+  idx: number; // row index in the strategy blob
+  raw: string; // 'BET 5.000000'
+  kind: Kind;
+  amount: number | null;
+  label: string; // 'Bet 5'
+  childPath: string | null; // null = terminal (fold / call / check-back)
+};
 
-export interface SessionFilters {
-  count: number;
-  matchups?: string[];
-  streets?: Street[];
-  actors?: Actor[];
-}
-
-export interface Question {
-  nodeId: number;
-  spotId: string;
-  matchup: string;
-  street: Street;
-  board: string[];
-  actor: Actor;
-  /** Acting player's position, e.g. "SB". */
+export type TrailStep = {
+  path: string;
+  player: "OOP" | "IP";
   position: string;
-  /** The other player's position, e.g. "BB". */
-  opponentPosition: string;
-  pot: number;
-  effectiveStack: number;
-  /** Bet/raise sizes configured for each position on the current street. */
-  bettingOptions: BettingOptions;
-  /** Preflop action sequence that produced this spot ("hand history"). */
-  preflop: string;
-  actions: string[];
-  hand: string;
-  holeCards: string[];
-}
+  actions: { label: string; kind: Kind; amount: number | null; childPath: string | null; chosen: boolean }[];
+};
 
-export interface Answer {
-  nodeId: number;
-  hand: string;
-  actions: string[];
-  freqs: number[];
-  bestIndex: number;
-  /** GTO frequency of the action the user picked (mixed-strategy score). */
-  score: number | null;
-}
+export type GridCell = {
+  label: string; // 'AKs'
+  combos: number; // combos of this class present in the range
+  freqs: number[]; // mean frequency per action over those combos (action idx order)
+};
 
-export interface AnsweredQuestion {
-  question: Question;
-  answer: Answer;
-  chosenIndex: number;
-}
+export type HandRow = { hand: string; cls: string; freqs: number[] };
+
+export type NodeResponse = {
+  spot: SpotInfo;
+  node: { nodeId: number; path: string; player: "OOP" | "IP"; position: string; actions: ActionInfo[] };
+  trail: TrailStep[]; // root .. current node
+  nHands: number;
+  summary: { freq: number; combos: number }[]; // per action idx
+  grid: GridCell[][]; // 13 x 13, AA top-left
+  hands: HandRow[];
+};

@@ -1,26 +1,52 @@
-@import "tailwindcss";
+:root { --bg: #0e1013; --panel: #171a20; --line: #262b34; --text: #e6e8ec; --dim: #8b93a1; --accent: #7ee0a0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; }
+button { font: inherit; color: inherit; }
+.viewer { max-width: 1500px; margin: 0 auto; padding: 16px; }
+.top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.top h1 { font-size: 18px; margin: 0; }
+.top select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.meta { display: flex; align-items: center; gap: 12px; color: var(--dim); }
+.hint { color: var(--dim); }
+.error { background: #3b1219; border: 1px solid #7f1d1d; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* cards */
+.cards { display: inline-flex; gap: 4px; }
+.card { display: inline-block; min-width: 30px; text-align: center; padding: 1px 5px; border-radius: 4px; color: #fff; font-weight: 700; font-size: 13px; }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* decision trail */
+.trail { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 14px; }
+.step { min-width: 120px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.step.current { border-color: var(--accent); }
+.step-head { display: flex; justify-content: space-between; font-weight: 700; }
+.step-head small { color: var(--dim); font-weight: 400; }
+.act { text-align: left; background: #20242c; border: 0; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+.act:hover:not(:disabled) { background: #2b313c; }
+.act:disabled { color: var(--dim); background: transparent; cursor: default; }
+.act.chosen { background: #3a404c; color: #fff; font-weight: 700; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+.panes { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 1000px) { .panes { grid-template-columns: 1fr; } }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* 13x13 grid */
+.grid13 { display: grid; grid-template-columns: repeat(13, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.cell { aspect-ratio: 1 / 0.82; border: 0; padding: 4px 5px; text-align: left; font-size: 12px; font-weight: 600; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.6); color: #fff; background: #1c2027; }
+.cell.empty { color: #4a515e; text-shadow: none; background: #14171c; }
+.cell.sel { outline: 2px solid #fff; outline-offset: -2px; position: relative; z-index: 1; }
+
+/* right pane */
+.right h2 { font-size: 15px; margin: 0 0 8px; }
+.right h2 small { color: var(--dim); font-weight: 400; margin-left: 8px; }
+.right h3 { font-size: 13px; color: var(--dim); margin: 16px 0 8px; font-weight: 600; }
+.tiles { display: flex; gap: 6px; }
+.tile { flex-basis: 0; min-width: 90px; border-radius: 6px; padding: 8px 10px; min-height: 80px; display: flex; flex-direction: column; justify-content: space-between; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.tile-label { font-size: 15px; font-weight: 700; }
+.tile-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tile-foot b { font-size: 20px; }
+.tile-foot small { opacity: .85; }
+.bar { display: flex; height: 6px; margin-top: 8px; border-radius: 3px; overflow: hidden; background: var(--line); }
+
+.hands { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+.hand { border-radius: 6px; padding: 6px 8px; text-shadow: 0 1px 2px rgba(0,0,0,.65); background-color: #1c2027; }
+.hand-cards { display: flex; gap: 3px; margin-bottom: 6px; text-shadow: none; }
+.hand-line { display: flex; justify-content: space-between; font-size: 12px; }

@@ -2,18 +2,17 @@
   "name": "gto-trainer",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "solver:setup": "node scripts/setup-solver.mjs",
-    "data:gen": "node scripts/generate-inputs.mjs",
-    "data:solve": "node scripts/run-solver.mjs",
-    "data:load": "node scripts/load-db.mjs",
-    "data:build": "npm run data:gen && npm run data:solve && npm run data:load"
+    "data:create": "node scripts/create-db.mjs"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -23,9 +22,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
   }
 }
