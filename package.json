@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "solver:setup": "node scripts/setup-solver.js",
+    "solver:run": "node scripts/run-and-import.js",
     "data:create": "node scripts/create-db.js"
   },
   "dependencies": {
