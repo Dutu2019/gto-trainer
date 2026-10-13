@@ -1,6 +1,6 @@
 -- GTO solve database (SQLite; Postgres-compatible with BLOB -> BYTEA, AUTOINCREMENT -> GENERATED)
 PRAGMA foreign_keys = ON;
- 
+
 -- Global dictionary of the 1326 hole-card combos. combo_id is stable and shared by every spot.
 -- Hand naming matches the solver export: higher card first (rank, then suit c<d<h<s), e.g. 'Ts8s', 'TsTc'.
 CREATE TABLE IF NOT EXISTS combos (
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS combos (
   c1       TEXT NOT NULL,               -- 'As'
   c2       TEXT NOT NULL                -- 'Kd'
 );
- 
+
 -- One row per solved spot (one JSON file)
 CREATE TABLE IF NOT EXISTS spots (
   spot_id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS spots (
   imported_at    TEXT DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (source_file)
 );
- 
+
 -- The hands each side can hold in this spot. Fixed for the whole tree, so stored ONCE here
 -- instead of repeating 214/222 hand strings in every node. Array position = column index in strategy blobs.
 CREATE TABLE IF NOT EXISTS spot_ranges (
@@ -39,8 +39,10 @@ CREATE TABLE IF NOT EXISTS spot_ranges (
   combo_ids BLOB NOT NULL,              -- uint16 little-endian [n_hands], references combos
   PRIMARY KEY (spot_id, side)
 );
- 
--- Decision nodes only (tree structure, no numbers)
+
+-- Tree structure, no numbers. node_type 'action' = a player decides; 'chance' = the betting round is over and
+-- the next card is dealt. Chance nodes are leaves here: the solver export holds only a stub for them (no
+-- strategy, no children), so nothing below them exists in the file. They have no node_strategy row.
 CREATE TABLE IF NOT EXISTS nodes (
   spot_id     INTEGER NOT NULL REFERENCES spots(spot_id) ON DELETE CASCADE,
   node_id     INTEGER NOT NULL,         -- DFS pre-order, root = 0
@@ -48,15 +50,19 @@ CREATE TABLE IF NOT EXISTS nodes (
   action_in   TEXT,                     -- compact action that led here: 'b5', 'r15'
   action_path TEXT NOT NULL,            -- '' for root, else 'x-b5-r15'
   depth       INTEGER NOT NULL,
-  player      TEXT NOT NULL CHECK (player IN ('OOP','IP')),
-  n_actions   INTEGER NOT NULL,
-  PRIMARY KEY (spot_id, node_id)
+  node_type   TEXT NOT NULL DEFAULT 'action' CHECK (node_type IN ('action','chance')),
+  player      TEXT CHECK (player IN ('OOP','IP')),   -- NULL for chance nodes
+  n_actions   INTEGER NOT NULL,                      -- 0 for chance nodes
+  deal_number INTEGER,                               -- chance nodes only (as exported by the solver)
+  PRIMARY KEY (spot_id, node_id),
+  CHECK ((node_type = 'action') = (player IS NOT NULL))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ix_nodes_path   ON nodes(spot_id, action_path);
 CREATE INDEX        IF NOT EXISTS ix_nodes_parent ON nodes(spot_id, parent_id);
- 
--- Every action available at a node, in blob row order. child_node_id NULL = terminal
--- (fold, call, or check-back: the file has no node for these).
+
+-- Every action available at a node, in blob row order. child_node_id NULL = hand over (fold, or a call /
+-- check-back on the river). Otherwise it points at the next action node, or a chance node when the
+-- action closes a betting round on the flop or turn.
 CREATE TABLE IF NOT EXISTS node_actions (
   spot_id       INTEGER NOT NULL,
   node_id       INTEGER NOT NULL,
@@ -68,7 +74,7 @@ CREATE TABLE IF NOT EXISTS node_actions (
   PRIMARY KEY (spot_id, node_id, action_idx),
   FOREIGN KEY (spot_id, node_id) REFERENCES nodes(spot_id, node_id) ON DELETE CASCADE
 );
- 
+
 -- Numeric payload: one blob per node, kept apart so tree browsing never touches it.
 -- Layout: uint8 [n_actions][n_hands], action-major, then compressed.
 -- Each hand's column sums to 255 (largest-remainder rounding), so freq = value/255.
@@ -80,7 +86,7 @@ CREATE TABLE IF NOT EXISTS node_strategy (
   PRIMARY KEY (spot_id, node_id),
   FOREIGN KEY (spot_id, node_id) REFERENCES nodes(spot_id, node_id) ON DELETE CASCADE
 );
- 
+
 -- Precomputed per-node aggregates for browsing / cross-spot queries (no blob decoding).
 -- NOTE: the JSON has no range weights, so these are plain averages over the combos listed.
 CREATE TABLE IF NOT EXISTS node_summary (
@@ -90,3 +96,5 @@ CREATE TABLE IF NOT EXISTS node_summary (
   PRIMARY KEY (spot_id, node_id),
   FOREIGN KEY (spot_id, node_id) REFERENCES nodes(spot_id, node_id) ON DELETE CASCADE
 );
+
+PRAGMA user_version = 2;  -- v1 had no node_type/deal_number; create_db.js refuses to reuse a v1 file

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Import one solver JSON (nested actions/childrens/strategy) into the SQLite schema.
-// usage: node import_solve.js solve.json --db gto.db [--board QsJh4d8c3s] [--street river]
+// usage: node import_solve.js solve.json --db gto.db [--board QsJh4d8c3s]
 //                             [--oop BB] [--ip BTN] [--pot 6] [--stack 94]
 import fs from "node:fs";
 import path from "node:path";
@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createDb } from "./create-db.js";
 
 function parseArgs(argv) {
-  const a = { json: null, db: "gto.db", street: "river", oop: "BB", ip: "BTN" };
+  const a = { json: null, db: "gto.db", oop: "BB", ip: "BTN" };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (!k.startsWith("--")) {
@@ -61,6 +61,15 @@ export function importSolve(db, file, opts) {
   const board = opts.board || (m && m[0]);
   if (!board) throw new Error("board not found in filename; pass --board");
 
+  // street follows from the board (3 = flop, 4 = turn, 5 = river); --street is only a sanity check
+  const inferred = { 3: "flop", 4: "turn", 5: "river" }[board.length / 2];
+  if (!inferred) throw new Error(`board '${board}' must have 3-5 cards`);
+  if (opts.street && opts.street !== inferred)
+    throw new Error(
+      `--street ${opts.street} contradicts the ${board.length / 2}-card board '${board}' (${inferred})`,
+    );
+  const street = inferred;
+
   const root = JSON.parse(fs.readFileSync(file, "utf8"));
   const oopRaw = root.player; // first to act = OOP
   const side = (p) => (p === oopRaw ? "OOP" : "IP");
@@ -75,7 +84,9 @@ export function importSolve(db, file, opts) {
   const insSpot =
     db.prepare(`INSERT INTO spots(source_file,street,board,pos_oop,pos_ip,root_player_raw,pot_bb,eff_stack_bb)
                               VALUES (?,?,?,?,?,?,?,?)`);
-  const insNode = db.prepare("INSERT INTO nodes VALUES (?,?,?,?,?,?,?,?)");
+  const insNode =
+    db.prepare(`INSERT INTO nodes(spot_id,node_id,parent_id,action_in,action_path,depth,node_type,player,n_actions,deal_number)
+                              VALUES (?,?,?,?,?,?,?,?,?,?)`);
   const insStrat = db.prepare(
     "INSERT INTO node_strategy(spot_id,node_id,strategy) VALUES (?,?,?)",
   );
@@ -87,7 +98,7 @@ export function importSolve(db, file, opts) {
     const sid = Number(
       insSpot.run(
         base,
-        opts.street,
+        street,
         board,
         opts.oop,
         opts.ip,
@@ -99,9 +110,34 @@ export function importSolve(db, file, opts) {
 
     const hands = {}; // side -> hand list (file order)
     let counter = 0;
+    const stats = { action: 0, chance: 0 };
 
     function walk(node, parent, actionIn, p, depth) {
       const nid = counter++;
+
+      if (node.node_type === "chance_node") {
+        // Betting round over, next card dealt. The export holds only this stub (deal_number, no children,
+        // no strategy), so it is stored as a leaf.
+        insNode.run(
+          sid,
+          nid,
+          parent,
+          actionIn,
+          p,
+          depth,
+          "chance",
+          null,
+          0,
+          node.deal_number ?? null,
+        );
+        stats.chance++;
+        return nid;
+      }
+      if (node.node_type !== "action_node")
+        throw new Error(`unknown node_type '${node.node_type}' at '${p}'`);
+      if (!node.strategy)
+        throw new Error(`action node without strategy at '${p}'`);
+
       const s = side(node.player);
       const strat = node.strategy.strategy;
       const hl = Object.keys(strat);
@@ -116,7 +152,19 @@ export function importSolve(db, file, opts) {
       if (JSON.stringify(acts) !== JSON.stringify(node.strategy.actions))
         throw new Error(`action mismatch at node '${p}'`);
 
-      insNode.run(sid, nid, parent, actionIn, p, depth, s, acts.length);
+      insNode.run(
+        sid,
+        nid,
+        parent,
+        actionIn,
+        p,
+        depth,
+        "action",
+        s,
+        acts.length,
+        null,
+      );
+      stats.action++;
 
       // strategy blob: uint8 [n_actions][n_hands], action-major
       const q = quantize(hl.map((h) => strat[h]));
@@ -155,10 +203,10 @@ export function importSolve(db, file, opts) {
       });
       insRange.run(sid, s, hl.length, b);
     }
-    return { sid, nodes: counter };
+    return { sid, nodes: counter, ...stats };
   });
 
-  return { ...run(), board };
+  return { ...run(), board, street };
 }
 
 const isMain =
@@ -168,6 +216,8 @@ if (isMain) {
   const a = parseArgs(process.argv.slice(2));
   const db = createDb(a.db);
   const r = importSolve(db, a.json, a);
-  console.log(`spot_id=${r.sid} board=${r.board} nodes=${r.nodes} db=${a.db}`);
+  console.log(
+    `spot_id=${r.sid} board=${r.board} street=${r.street} nodes=${r.nodes} (${r.action} action, ${r.chance} chance) db=${a.db}`,
+  );
   db.close();
 }
