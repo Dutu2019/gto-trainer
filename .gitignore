@@ -50,3 +50,4 @@ next-env.d.ts
 /data/inputs/
 /data/raw/
 /data/gto.db
+/data/preflop/

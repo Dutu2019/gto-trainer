@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { listSpots } from "@/lib/solve";
+import { groupSpots, listSpots } from "@/lib/solve";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/spots -> every solved spot in the database
+// GET /api/spots -> every solved spot in the database, plus the same spots
+// grouped by preflop line and flop (what the viewer's picker shows).
 export function GET() {
-  return NextResponse.json({ spots: listSpots(getDb()) });
+  const spots = listSpots(getDb());
+  return NextResponse.json({ spots, groups: groupSpots(spots) });
 }

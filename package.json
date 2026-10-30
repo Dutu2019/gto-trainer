@@ -10,16 +10,19 @@
     "lint": "eslint",
     "solver:setup": "node scripts/setup-solver.js",
     "solver:run": "node scripts/run-and-import.js",
-    "data:create": "node scripts/create-db.js"
+    "data:create": "node scripts/create-db.js",
+    "data:preflop": "node scripts/build-preflop-ranges.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
-    "next": "16.4.0",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "eslint-config-next": "^16.4.3",
+    "next": "^16.4.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -27,6 +30,7 @@
     "typescript": "^5"
   },
   "allowScripts": {
-    "better-sqlite3@13.0.3": true
+    "better-sqlite3@13.0.3": true,
+    "unrs-resolver@1.12.2": true
   }
 }

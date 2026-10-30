@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createDb } from "./create-db.js";
 
 function parseArgs(argv) {
-  const a = { json: null, db: "gto.db", oop: "BB", ip: "BTN" };
+  const a = { json: null, db: null, oop: "BB", ip: "BTN" };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (!k.startsWith("--")) {
@@ -95,6 +95,9 @@ export function importSolve(db, file, opts) {
   const insRange = db.prepare("INSERT INTO spot_ranges VALUES (?,?,?,?)");
 
   const run = db.transaction(() => {
+    // Re-importing the same file replaces its previous rows (children cascade).
+    db.prepare("DELETE FROM spots WHERE source_file = ?").run(base);
+
     const sid = Number(
       insSpot.run(
         base,
@@ -214,10 +217,10 @@ const isMain =
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const a = parseArgs(process.argv.slice(2));
-  const db = createDb(a.db);
+  const db = createDb(a.db ?? undefined);
   const r = importSolve(db, a.json, a);
   console.log(
-    `spot_id=${r.sid} board=${r.board} street=${r.street} nodes=${r.nodes} (${r.action} action, ${r.chance} chance) db=${a.db}`,
+    `spot_id=${r.sid} board=${r.board} street=${r.street} nodes=${r.nodes} (${r.action} action, ${r.chance} chance) db=${db.name}`,
   );
   db.close();
 }

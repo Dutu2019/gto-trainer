@@ -8,6 +8,7 @@
 //   node scripts/run-and-import.js --import-only   # reuse data/raw/*.json, skip solving
 //   node scripts/run-and-import.js --force         # re-solve + re-import over existing results
 //   node scripts/run-and-import.js --timeout 600   # kill a solve after 600 seconds
+//   node scripts/run-and-import.js --timeout 0     # no deadline (default: 1800s)
 //
 // How it works:
 // - The solver is executed with CWD = its own directory (solver/texassolver):
@@ -15,9 +16,13 @@
 //   the input file is passed as a path relative to it.
 // - The solver always writes ./output_result.json next to the exe. Before each
 //   run any stale copy is removed, and afterwards the fresh file is moved to
-//   data/raw/<input-stem>.json. stdout/stderr are captured to
-//   data/raw/<input-stem>.log (the solver prints its progress/exploitability
-//   tables there, not to a log file).
+//   data/raw/<input-stem>.json. The solver's stdout/stderr are streamed to
+//   data/raw/<input-stem>.log as they arrive (the solver prints its
+//   progress/exploitability tables there, not to a log file), so a running
+//   solve leaves a growing log behind instead of an empty one.
+// - Every solve is bounded by --timeout (default 1800s). A solver that runs out
+//   of memory stops printing iterations and never exits, so without a deadline
+//   one bad input would leave the job "running" forever.
 // - Spot metadata comes from the input filename "<oop>_<ip>_<street>_<board>"
 //   (e.g. btn_bb_river_QsJh4d8c3s → OOP=BTN, IP=BB) plus the set_* lines inside
 //   the file (board, pot, effective stack); board and street are cross-checked.
@@ -29,7 +34,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { ROOT, SOLVER_DIR, requireSolver } from "./solver.js";
 import { createDb } from "./create-db.js";
 import { importSolve } from "./import-solve.js";
@@ -40,12 +45,14 @@ const SOLVER_RESULT = path.join(SOLVER_DIR, "output_result.json");
 
 // ---------------------------------------------------------------- CLI parsing
 
+const DEFAULT_TIMEOUT_SEC = 1800;
+
 function parseCli(argv) {
   const out = {
     only: null,
     importOnly: false,
     force: false,
-    timeoutSec: 0,
+    timeoutSec: DEFAULT_TIMEOUT_SEC,
     help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -55,7 +62,8 @@ function parseCli(argv) {
     else if (a === "--force") out.force = true;
     else if (a === "--timeout") {
       const v = Number(argv[++i]);
-      if (!Number.isFinite(v) || v <= 0) die("--timeout needs seconds, e.g. --timeout 600");
+      if (!Number.isFinite(v) || v < 0)
+        die("--timeout needs seconds (0 disables the deadline), e.g. --timeout 600");
       out.timeoutSec = v;
     } else if (a === "--help" || a === "-h") out.help = true;
     else die(`unknown argument: ${a} (see --help)`);
@@ -79,7 +87,8 @@ Options:
   --import-only    skip solving; import the existing data/raw/*.json results
   --force          re-solve inputs that already have a result, and re-import
                    spots that are already in the database
-  --timeout <sec>  kill a solve after <sec> seconds (default: no timeout)
+  --timeout <sec>  kill a solve after <sec> seconds (default: ${DEFAULT_TIMEOUT_SEC};
+                   use 0 to disable the deadline)
   -h, --help       show this help
 
 The solver (console_solver.exe) runs with CWD = solver/texassolver and is
@@ -104,16 +113,18 @@ function parseInput(inputPath) {
 
 /**
  * Spot metadata for importSolve(). Positions are not in the input file — they
- * come from the filename convention "<oop>_<ip>_<street>_<board>"
- * (e.g. btn_bb_river_QsJh4d8c3s: OOP=BTN, IP=BB). The board is cross-checked
- * against set_board (commas stripped) and the street against the board size.
+ * come from the filename convention "<oop>_<ip>_<street>_<board>[_<id>]"
+ * (e.g. btn_bb_river_QsJh4d8c3s_1a2b3c4d: OOP=BTN, IP=BB). The trailing id is
+ * the spot identity hash (see spotStem in lib/solver-input.ts) and is ignored
+ * here; it only keeps distinct solves on distinct files. The board is
+ * cross-checked against set_board and the street against the board size.
  */
 function readMeta(inputPath) {
   const stem = path.basename(inputPath, ".txt");
   const [oop, ip, street, fileBoard, ...rest] = stem.split("_");
-  if (!oop || !ip || !street || !fileBoard || rest.length > 0) {
+  if (!oop || !ip || !street || !fileBoard || rest.length > 1) {
     throw new Error(
-      `cannot parse filename '${stem}': expected <oop>_<ip>_<street>_<board>`,
+      `cannot parse filename '${stem}': expected <oop>_<ip>_<street>_<board>[_<id>]`,
     );
   }
   const kv = parseInput(inputPath);
@@ -150,7 +161,14 @@ function readMeta(inputPath) {
 
 // ----------------------------------------------------------------- solver run
 
-/** Run the solver on one input; returns the path of the moved result JSON. */
+/**
+ * Run the solver on one input, streaming its output to data/raw/<stem>.log.
+ *
+ * Streams instead of buffering (the old spawnSync approach held the whole log
+ * in memory, wrote it only after the solve ended, and would kill the solver
+ * once its output passed spawnSync's 1 MB maxBuffer), and reports progress as
+ * the solver prints iteration tables.
+ */
 function runSolver(exe, inputPath, stem, opts) {
   const logPath = path.join(RAW_DIR, `${stem}.log`);
   const jsonPath = path.join(RAW_DIR, `${stem}.json`);
@@ -165,37 +183,102 @@ function runSolver(exe, inputPath, stem, opts) {
   // Never leave a stale result next to the exe.
   if (fs.existsSync(SOLVER_RESULT)) fs.rmSync(SOLVER_RESULT);
 
-  const t0 = Date.now();
-  const r = spawnSync(exe, args, {
-    cwd: SOLVER_DIR,
-    encoding: "utf8",
-    timeout: opts.timeoutSec > 0 ? opts.timeoutSec * 1000 : undefined,
-    windowsHide: true,
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const log = fs.createWriteStream(logPath, { flags: "w" });
+    const child = spawn(exe, args, {
+      cwd: SOLVER_DIR,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let timedOut = false;
+    let finished = false;
+    const deadline =
+      opts.timeoutSec > 0
+        ? setTimeout(() => {
+            timedOut = true;
+            child.kill();
+          }, opts.timeoutSec * 1000)
+        : null;
+    const heartbeat = setInterval(() => {
+      console.log(`solve: still running (${Math.round((Date.now() - t0) / 1000)}s)`);
+    }, 30_000);
+
+    // The solver redraws an ASCII progress bar with backspaces; keep whole
+    // lines only and forward the iteration summaries to our own stdout so the
+    // web job log shows live progress.
+    let tail = "";
+    const onData = (chunk) => {
+      log.write(chunk);
+      tail += chunk.toString("utf8");
+      const lines = tail.split(/\r?\n/);
+      tail = lines.pop() ?? "";
+      for (const line of lines) {
+        const m = /^Total exploitability ([\d.]+)/.exec(line);
+        if (m) console.log(`solve: exploitability ${m[1]}%`);
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+
+    const stop = () => {
+      if (deadline) clearTimeout(deadline);
+      clearInterval(heartbeat);
+    };
+
+    child.on("error", (err) => {
+      if (finished) return;
+      finished = true;
+      stop();
+      log.end(() => reject(new Error(`failed to start solver: ${err.message}`)));
+    });
+
+    child.on("close", (code, signal) => {
+      if (finished) return;
+      finished = true;
+      stop();
+      const seconds = (Date.now() - t0) / 1000;
+      log.end(() => {
+        if (timedOut) {
+          reject(
+            new Error(
+              `solve timed out after ${opts.timeoutSec}s (log: ${logPath}) — ` +
+                "the tree is too big for this machine; fewer bet sizes help",
+            ),
+          );
+          return;
+        }
+        if (code !== 0) {
+          reject(
+            new Error(
+              `solver exited with ${code ?? signal} after ${seconds.toFixed(0)}s ` +
+                `(log: ${logPath}) — an exit right after "Iter: 0" usually means ` +
+                "it ran out of memory",
+            ),
+          );
+          return;
+        }
+        if (!fs.existsSync(SOLVER_RESULT)) {
+          reject(new Error(`solver wrote no ${path.basename(SOLVER_RESULT)} (log: ${logPath})`));
+          return;
+        }
+        try {
+          fs.rmSync(jsonPath, { force: true });
+          try {
+            fs.renameSync(SOLVER_RESULT, jsonPath);
+          } catch {
+            // cross-device fallback: copy + unlink
+            fs.copyFileSync(SOLVER_RESULT, jsonPath);
+            fs.rmSync(SOLVER_RESULT);
+          }
+          resolve({ jsonPath, logPath, seconds });
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
   });
-  fs.writeFileSync(logPath, `${(r.stdout || "")}${(r.stderr || "")}`);
-
-  if (r.error?.code === "ETIMEDOUT") {
-    throw new Error(`solve timed out after ${opts.timeoutSec}s (log: ${logPath})`);
-  }
-  if (r.error) throw new Error(`failed to start solver: ${r.error.message}`);
-  if (r.status !== 0) {
-    throw new Error(
-      `solver exited with code ${r.status ?? r.signal} (log: ${logPath})`,
-    );
-  }
-  if (!fs.existsSync(SOLVER_RESULT)) {
-    throw new Error(`solver wrote no ${path.basename(SOLVER_RESULT)} (log: ${logPath})`);
-  }
-
-  fs.rmSync(jsonPath, { force: true });
-  try {
-    fs.renameSync(SOLVER_RESULT, jsonPath);
-  } catch {
-    // cross-device fallback: copy + unlink
-    fs.copyFileSync(SOLVER_RESULT, jsonPath);
-    fs.rmSync(SOLVER_RESULT);
-  }
-  return { jsonPath, logPath, seconds: (Date.now() - t0) / 1000 };
 }
 
 // ----------------------------------------------------------------------- main
@@ -212,7 +295,7 @@ function listInputs(only) {
   return files.map((f) => path.join(INPUTS_DIR, f));
 }
 
-function main() {
+async function main() {
   const opts = parseCli(process.argv.slice(2));
   if (opts.help) {
     printHelp();
@@ -273,7 +356,7 @@ function main() {
       reused++;
     } else {
       try {
-        const { seconds } = runSolver(exe, inputPath, stem, opts);
+        const { seconds } = await runSolver(exe, inputPath, stem, opts);
         solved++;
         console.log(`solve: ok in ${seconds.toFixed(1)}s → data/raw/${stem}.json`);
       } catch (err) {
@@ -315,4 +398,7 @@ function main() {
   if (failed > 0) process.exitCode = 1;
 }
 
-main();
+main().catch((err) => {
+  console.error(`run-and-import: ${err?.message ?? err}`);
+  process.exitCode = 1;
+});

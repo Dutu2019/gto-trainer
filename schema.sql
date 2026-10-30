@@ -27,8 +27,14 @@ CREATE TABLE IF NOT EXISTS spots (
   solver         TEXT, solver_version TEXT,
   exploitability REAL,                  -- NOT in the JSON
   imported_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+  -- Continuations: the spot this tree was dealt from, the decision node whose
+  -- action closed the street, and the card that started this street.
+  parent_spot_id INTEGER REFERENCES spots(spot_id) ON DELETE SET NULL,
+  parent_path    TEXT,
+  dealt_card     TEXT,
   UNIQUE (source_file)
 );
+CREATE INDEX IF NOT EXISTS ix_spots_parent ON spots(parent_spot_id);
 
 -- The hands each side can hold in this spot. Fixed for the whole tree, so stored ONCE here
 -- instead of repeating 214/222 hand strings in every node. Array position = column index in strategy blobs.
@@ -97,4 +103,4 @@ CREATE TABLE IF NOT EXISTS node_summary (
   FOREIGN KEY (spot_id, node_id) REFERENCES nodes(spot_id, node_id) ON DELETE CASCADE
 );
 
-PRAGMA user_version = 2;  -- v1 had no node_type/deal_number; create_db.js refuses to reuse a v1 file
+PRAGMA user_version = 3;  -- v3 adds spot ancestry (parent_spot_id/parent_path/dealt_card); create_db.js migrates v2
